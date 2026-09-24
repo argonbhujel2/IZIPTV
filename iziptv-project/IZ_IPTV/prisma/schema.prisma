@@ -1,0 +1,425 @@
+// IZ_IPTV - Neon PostgreSQL Schema
+// Prisma ORM schema for commercial ISP Android TV platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── ENUMS ───────────────────────────────────────────────
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  EXPIRED
+  BLOCKED
+}
+
+enum DeviceStatus {
+  PENDING
+  ACTIVE
+  INACTIVE
+  BLOCKED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  SUSPENDED
+  CANCELLED
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+  CONTENT_MANAGER
+  SUPPORT
+}
+
+enum BannerAction {
+  LIVE_TV
+  MOVIE
+  SERIES
+  APP
+  EXTERNAL_URL
+  INFO
+  NONE
+}
+
+// ─── USERS (Subscribers) ─────────────────────────────────
+
+model User {
+  id              String     @id @default(cuid())
+  username        String     @unique
+  passwordHash    String
+  fullName        String
+  phone           String?
+  email           String?
+  status          UserStatus @default(ACTIVE)
+  deviceLimit     Int        @default(2)
+  lastLoginAt     DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  devices         Device[]
+  sessions        Session[]
+  subscriptions   Subscription[]
+  favorites       Favorite[]
+  watchHistory    WatchHistory[]
+
+  @@index([username])
+  @@index([status])
+  @@map("users")
+}
+
+// ─── DEVICES ─────────────────────────────────────────────
+
+model Device {
+  id              String       @id @default(cuid())
+  deviceId        String       @unique // App-generated persistent ID
+  userId          String?
+  user            User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  model           String?
+  manufacturer    String?
+  androidVersion  String?
+  appVersion      String?
+  status          DeviceStatus @default(PENDING)
+  lastSeenAt      DateTime?
+  lastIp          String?
+  firstSeenAt     DateTime     @default(now())
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  sessions        Session[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([deviceId])
+  @@map("devices")
+}
+
+// ─── SESSIONS ────────────────────────────────────────────
+
+model Session {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceId        String?
+  device          Device?  @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  accessToken     String   @unique
+  refreshToken    String   @unique
+  expiresAt       DateTime
+  refreshExpiresAt DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+  @@index([accessToken])
+  @@index([refreshToken])
+  @@map("sessions")
+}
+
+// ─── SUBSCRIPTIONS ───────────────────────────────────────
+
+model Subscription {
+  id              String             @id @default(cuid())
+  userId          String
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planName        String             @default("Standard")
+  startDate       DateTime           @default(now())
+  expiryDate      DateTime
+  status          SubscriptionStatus @default(ACTIVE)
+  deviceLimit     Int                @default(2)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([expiryDate])
+  @@map("subscriptions")
+}
+
+// ─── CATEGORIES ──────────────────────────────────────────
+
+model Category {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  slug            String   @unique
+  iconUrl         String?
+  enabled         Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  channels        Channel[]
+
+  @@index([enabled])
+  @@index([sortOrder])
+  @@map("categories")
+}
+
+// ─── CHANNELS ────────────────────────────────────────────
+
+model Channel {
+  id              String   @id @default(cuid())
+  name            String
+  logoUrl         String?
+  streamUrl       String
+  categoryId      String?
+  category        Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  number          Int?
+  description     String?
+  enabled         Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  favorites       Favorite[]
+  watchHistory    WatchHistory[]
+
+  @@index([categoryId])
+  @@index([enabled])
+  @@index([sortOrder])
+  @@map("channels")
+}
+
+// ─── MOVIES ──────────────────────────────────────────────
+
+model Movie {
+  id              String   @id @default(cuid())
+  title           String
+  description     String?
+  posterUrl       String?
+  backdropUrl     String?
+  genre           String?
+  year            Int?
+  duration        Int?     // minutes
+  rating          Float?
+  streamUrl       String
+  trailerUrl      String?
+  featured        Boolean  @default(false)
+  enabled         Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  watchHistory    WatchHistory[]
+
+  @@index([enabled])
+  @@index([featured])
+  @@index([sortOrder])
+  @@map("movies")
+}
+
+// ─── SERIES ──────────────────────────────────────────────
+
+model Series {
+  id              String   @id @default(cuid())
+  title           String
+  description     String?
+  posterUrl       String?
+  backdropUrl     String?
+  genre           String?
+  year            Int?
+  featured        Boolean  @default(false)
+  enabled         Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  seasons         Season[]
+  watchHistory    WatchHistory[]
+
+  @@index([enabled])
+  @@index([featured])
+  @@index([sortOrder])
+  @@map("series")
+}
+
+model Season {
+  id              String   @id @default(cuid())
+  seriesId        String
+  series          Series   @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  seasonNumber    Int
+  title           String?
+  posterUrl       String?
+  enabled         Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  episodes        Episode[]
+
+  @@unique([seriesId, seasonNumber])
+  @@index([seriesId])
+  @@map("seasons")
+}
+
+model Episode {
+  id              String   @id @default(cuid())
+  seasonId        String
+  season          Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  episodeNumber   Int
+  title           String
+  description     String?
+  thumbnailUrl    String?
+  streamUrl       String
+  duration        Int?     // minutes
+  enabled         Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  watchHistory    WatchHistory[]
+
+  @@unique([seasonId, episodeNumber])
+  @@index([seasonId])
+  @@map("episodes")
+}
+
+// ─── APP CONFIG (Remote Configuration) ───────────────────
+
+model AppConfig {
+  id                        String   @id @default("default")
+  appName                   String   @default("IZ_IPTV")
+  logoUrl                   String?
+  homeBackgroundUrl         String?
+  homeBackgroundEnabled     Boolean  @default(true)
+  maintenanceMode           Boolean  @default(false)
+  maintenanceMessage        String?
+  liveTvEnabled             Boolean  @default(true)
+  moviesEnabled             Boolean  @default(true)
+  seriesEnabled             Boolean  @default(true)
+  appsEnabled               Boolean  @default(true)
+  youtubeEnabled            Boolean  @default(true)
+  netflixEnabled            Boolean  @default(true)
+  latestVersion             String   @default("1.0.0")
+  minimumSupportedVersion   String   @default("1.0.0")
+  updateUrl                 String?
+  releaseNotes              String?
+  forceUpdate               Boolean  @default(false)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@map("app_config")
+}
+
+// ─── BANNERS ─────────────────────────────────────────────
+
+model Banner {
+  id              String       @id @default(cuid())
+  title           String
+  description     String?
+  imageUrl        String
+  action          BannerAction @default(NONE)
+  actionValue     String?      // movie id, series id, app package, url, etc.
+  enabled         Boolean      @default(true)
+  sortOrder       Int          @default(0)
+  startsAt        DateTime?
+  endsAt          DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([enabled])
+  @@index([sortOrder])
+  @@map("banners")
+}
+
+// ─── APPS (External launchers) ───────────────────────────
+
+model App {
+  id              String   @id @default(cuid())
+  name            String
+  packageName     String   @unique
+  iconUrl         String?
+  enabled         Boolean  @default(true)
+  homeVisible     Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([enabled])
+  @@index([sortOrder])
+  @@map("apps")
+}
+
+// ─── ADMIN USERS ─────────────────────────────────────────
+
+model AdminUser {
+  id              String    @id @default(cuid())
+  username        String    @unique
+  passwordHash    String
+  fullName        String
+  email           String?
+  role            AdminRole @default(ADMIN)
+  enabled         Boolean   @default(true)
+  lastLoginAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  auditLogs       AuditLog[]
+
+  @@index([username])
+  @@map("admin_users")
+}
+
+// ─── AUDIT LOGS ──────────────────────────────────────────
+
+model AuditLog {
+  id              String   @id @default(cuid())
+  adminId         String?
+  admin           AdminUser? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  action          String
+  targetType      String?
+  targetId        String?
+  metadata        Json?
+  ipAddress       String?
+  createdAt       DateTime @default(now())
+
+  @@index([adminId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ─── FAVORITES & WATCH HISTORY ───────────────────────────
+
+model Favorite {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channelId       String
+  channel         Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+
+  @@unique([userId, channelId])
+  @@index([userId])
+  @@map("favorites")
+}
+
+model WatchHistory {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channelId       String?
+  channel         Channel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  movieId         String?
+  movie           Movie?   @relation(fields: [movieId], references: [id], onDelete: SetNull)
+  seriesId        String?
+  series          Series?  @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  episodeId       String?
+  episode         Episode? @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+  positionSeconds Int      @default(0)
+  durationSeconds Int?
+  lastWatchedAt   DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+  @@index([lastWatchedAt])
+  @@map("watch_history")
+}

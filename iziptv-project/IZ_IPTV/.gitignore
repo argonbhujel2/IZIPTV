@@ -1,0 +1,12 @@
+node_modules/
+.next/
+.env
+.env.local
+*.apk
+*.aab
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.DS_Store
